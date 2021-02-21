@@ -1,0 +1,5 @@
+/node_modules
+.env
+app.yaml
+package-lock.json
+testingaog-wlgdsq-766bd2492483.json

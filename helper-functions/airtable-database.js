@@ -50,7 +50,7 @@ const createNewOrganization = async (fields) => {
 
         let response = await axios.post(url, { fields }, { headers });
         if (response.status == 200) {
-            return 1;
+            return response.data;
         } else {
             return 0;
         }
@@ -59,15 +59,6 @@ const createNewOrganization = async (fields) => {
         return 2;
     }
 };
-
-// let date = new Date();
-// let createdAt = date.toLocaleString('en-US', {timeZone: TIMEZONE});
-
-// let fields = {
-//     email: 'jhon@gmail.com',
-//     organization: 'Hitech Hospital',
-//     createdAt: createdAt
-// };
 
 // Create new donor info
 const createNewDonor = async (fields) => {
@@ -79,7 +70,6 @@ const createNewDonor = async (fields) => {
     }
 
     try {
-
         let response = await axios.post(url, { fields }, { headers });
         if (response.status == 200) {
             return 1;
@@ -92,8 +82,33 @@ const createNewDonor = async (fields) => {
     }
 };
 
+// Update the organization table
+const updateOrganizationById = async (id, fields) => {
+
+    url = `https://api.airtable.com/v0/${APP_ID}/OrganizationInformation/${id}`;
+    headers = {
+        'Authorization': 'Bearer ' + API_KEY,
+        'Content-Type': 'application/json'
+    }
+
+    try {
+
+        let response = await axios.patch(url, { fields }, { headers });
+
+        if (response.status == 200) {
+            return 1;
+        } else {
+            return 0;
+        }
+    } catch (error) {
+        console.log(`Error at updateOrganizationById --> ${error}`);
+        return 2;
+    }
+};
+
 module.exports = {
     getOrganizationByEmail,
     createNewDonor,
-    createNewOrganization
+    createNewOrganization,
+    updateOrganizationById
 };

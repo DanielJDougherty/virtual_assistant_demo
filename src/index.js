@@ -58,7 +58,7 @@ const userProvidesEmail = async (req) => {
         }];
     } else {
         // Organization found in airtable with the email
-        outString += `Thank you ${organization.fields.organization}, To get us started, We are going to work together to document a few pieces of information. Let me start with your full name.`;
+        outString += `Thank you ${organization.fields.firstName}, To get us started, We are going to work together to document a few pieces of information. Let me start with your full name.`;
         let awaitFullname = `${session}/contexts/await-full-name`;
         let sessionVars = `${session}/contexts/session-vars`;
         outputContexts = [{
@@ -70,7 +70,7 @@ const userProvidesEmail = async (req) => {
             lifespanCount: 20,
             parameters: {
                 email: email,
-                organization: organization.fields
+                organization: organization
             }
         }];
     }
@@ -107,15 +107,16 @@ const userProvidesOrganizationName = async (req) => {
         createdAt: createdAt
     };
 
-    await AT.createNewOrganization(fields);
+    let organization = await AT.createNewOrganization(fields);
 
-    outString += `Thank you ${organizationName}, To get us started, We are going to work together to document a few pieces of information. Let me start with your full name.`;
+    outString += `Thank you ${organization.fields.firstName}, To get us started, We are going to work together to document a few pieces of information. Let me start with your full name.`;
     let sessionVars = `${session}/contexts/session-vars`;
     outputContexts = [{
         name: sessionVars,
         lifespanCount: 20,
         parameters: {
-            organizationName: organizationName
+            organizationName: organizationName,
+            organization: organization
         }
     }];
 
@@ -152,8 +153,8 @@ const userProvidesVentilatorDetails = async (req) => {
         if (session.includes('/contexts/session-vars')) {
             if (outputContext.parameters.hasOwnProperty('organization')) {
                 let organization = outputContext.parameters.organization;
-                email = organization.email;
-                organizationName = organization['organization'];
+                email = organization.fields.email;
+                organizationName = organization.fields.organization;
             } else {
                 email = outputContext.parameters.email;
                 organizationName = outputContext.parameters.organizationName
@@ -187,6 +188,71 @@ const userProvidesVentilatorDetails = async (req) => {
     }
 };
 
+// Handle user provides name
+const userProvidesName = async (req) => {
+
+    let fullName = req.body.queryResult.parameters.fullName.name;
+    let values = fullName.split(' ');
+    let firstName, lastName;
+
+    if (values.length == 1) {
+        firstName = values[0];
+        lastName = 'No last name';
+    } else if (values.length == 2) {
+        firstName = values[0];
+        lastName = values[1];
+    } else {
+        firstName = values[0];
+        lastName = 'No last name';
+    }
+
+    let outputContexts = req.body.queryResult.outputContexts;
+    let organization = {};
+
+    outputContexts.forEach(outputContext => {
+        let session = outputContext.name;
+        if (session.includes('/contexts/session-vars')) {
+            organization = outputContext.parameters.organization;
+        }
+    });
+
+    let fields = {
+        firstName: firstName,
+        lastName: lastName
+    };
+
+    await AT.updateOrganizationById(organization.id, fields);
+
+    return {
+        fulfillmentText: 'Please let me know a callback number where we can contact you.'
+    }
+};
+
+// Handle userProvidesPhoneNumber
+const userProvidesPhoneNumber = async (req) => {
+
+    let phoneNumber = req.body.queryResult.parameters.phoneNumber;
+    let outputContexts = req.body.queryResult.outputContexts;
+    let organization = {};
+
+    outputContexts.forEach(outputContext => {
+        let session = outputContext.name;
+        if (session.includes('/contexts/session-vars')) {
+            organization = outputContext.parameters.organization;
+        }
+    });
+
+    let fields = {
+        phoneNumber: `${phoneNumber}`
+    };
+
+    await AT.updateOrganizationById(organization.id, fields);
+
+    return {
+        fulfillmentText: 'Please let me know patients cardiac date and time of death.'
+    }
+};
+
 // Google Dialogflow Webhook
 webApp.post('/webhook', async (req, res) => {
 
@@ -200,6 +266,10 @@ webApp.post('/webhook', async (req, res) => {
         responseText = await userProvidesOrganizationName(req);
     } if (action === 'userProvidesVentilatorDetails') {
         responseText = await userProvidesVentilatorDetails(req);
+    } if (action === 'userProvidesName') {
+        responseText = await userProvidesName(req);
+    } if (action === 'userProvidesPhoneNumber') {
+        responseText = await userProvidesPhoneNumber(req);
     } else {
         responseText['fulfullmentText'] = 'Something went wrong, try after sometime.';
     }

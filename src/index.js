@@ -181,14 +181,19 @@ const userProvidesVentilatorDetails = async (req) => {
             ventilatorDetail = outputContext.parameters.ventilatorDetail;
             fullName = outputContext.parameters.fullName.name;
             date = outputContext.parameters.date;
-            time = outputContext.parameters.time;
+            time = outputContext.parameters['date-time'];
             phoneNumber = outputContext.parameters.phoneNumber;
         }
     });
 
+    let deathDate, deathTime;
+    deathDate = time[1];
+    deathTime = time[0];
+    deathDateTime = dateTimeToString(deathDate, deathTime);
+
     let newDate = new Date();
     let createdAt = newDate.toLocaleString('en-US', { timeZone: TIMEZONE });
-    let cardiacDateTime = dateTimeToString(date, time);
+    let cardiacDateTime = dateTimeToString(date, date);
 
     let fields = {
         email: email,

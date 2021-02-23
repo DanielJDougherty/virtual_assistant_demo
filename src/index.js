@@ -37,6 +37,13 @@ const userProvidesEmail = async (req) => {
     let email = req.body.queryResult.parameters.email;
 
     let organization = await AT.getOrganizationByEmail(email);
+    let userName = 'user';
+
+    if (organization.status != 0) {
+        if (organization.fields.firstName != undefined) {
+            userName = organization.fields.firstName;
+        }
+    }
 
     if (organization.status == 2 || organization == undefined) {
         outString += 'Something is wrong with the ALI. Try again after sometime.';
@@ -58,12 +65,14 @@ const userProvidesEmail = async (req) => {
         }];
     } else {
         // Organization found in airtable with the email
-        outString += `Thank you ${organization.fields.firstName}, To get us started, We are going to work together to document a few pieces of information. Let me start with your full name.`;
-        let awaitFullname = `${session}/contexts/await-full-name`;
+        outString += `Thank you ${userName}, 
+                To get us started, We are going to work together to document a few pieces of information.
+                Please let me know your full name, call back number, patient cariac arrest date and time of death.`;
+        let awaitAllDetails = `${session}/contexts/await-all-details`;
         let sessionVars = `${session}/contexts/session-vars`;
         outputContexts = [{
-            name: awaitFullname,
-            lifespanCount: 2,
+            name: awaitAllDetails,
+            lifespanCount: 1,
         },
         {
             name: sessionVars,
@@ -108,10 +117,24 @@ const userProvidesOrganizationName = async (req) => {
     };
 
     let organization = await AT.createNewOrganization(fields);
+    let userName = 'user';
 
-    outString += `Thank you ${organization.fields.firstName}, To get us started, We are going to work together to document a few pieces of information. Let me start with your full name.`;
+    if (organization.status != 0) {
+        if (organization.fields.firstName != undefined) {
+            userName = organization.fields.firstName;
+        }
+    }
+
+    outString += `Thank you ${userName}, 
+                To get us started, We are going to work together to document a few pieces of information.
+                Please let me know your full name, call back number, patient cariac arrest date and time of death.`;
+    let awaitAllDetails = `${session}/contexts/await-all-details`;
     let sessionVars = `${session}/contexts/session-vars`;
     outputContexts = [{
+        name: awaitAllDetails,
+        lifespanCount: 1,
+    },
+    {
         name: sessionVars,
         lifespanCount: 20,
         parameters: {
@@ -126,14 +149,14 @@ const userProvidesOrganizationName = async (req) => {
 };
 
 // Converts the date and time from Dialogflow
-const dateTimeToString = (date) => {
+const dateTimeToString = (date, time) => {
 
     let year = date.split('T')[0].split('-')[0];
     let month = date.split('T')[0].split('-')[1];
     let day = date.split('T')[0].split('-')[2];
 
-    let hour = date.split('T')[1].split(':')[0];
-    let minute = date.split('T')[1].split(':')[1];
+    let hour = time.split('T')[1].split(':')[0];
+    let minute = time.split('T')[1].split(':')[1];
 
     let newDateTime = `${year}-${month}-${day}T${hour}:${minute}:00.000${TIMEOFFSET}`;
 
@@ -146,29 +169,26 @@ const dateTimeToString = (date) => {
 const userProvidesVentilatorDetails = async (req) => {
 
     let outputContexts = req.body.queryResult.outputContexts;
-    let email, organizationName, ventilatorDetail, fullName, dateTime, phoneNumber;
+    let email, organizationName, ventilatorDetail, fullName, date, time, phoneNumber;
+    let organization = {};
 
     outputContexts.forEach(outputContext => {
         let session = outputContext.name;
         if (session.includes('/contexts/session-vars')) {
-            if (outputContext.parameters.hasOwnProperty('organization')) {
-                let organization = outputContext.parameters.organization;
-                email = organization.fields.email;
-                organizationName = organization.fields.organization;
-            } else {
-                email = outputContext.parameters.email;
-                organizationName = outputContext.parameters.organizationName
-            }
+            organization = outputContext.parameters.organization;
+            email = organization.fields.email;
+            organizationName = organization.fields.organization;
             ventilatorDetail = outputContext.parameters.ventilatorDetail;
             fullName = outputContext.parameters.fullName.name;
-            dateTime = outputContext.parameters['date-time'][0]['date_time'];
+            date = outputContext.parameters.date;
+            time = outputContext.parameters.time;
             phoneNumber = outputContext.parameters.phoneNumber;
         }
     });
 
-    let date = new Date();
-    let createdAt = date.toLocaleString('en-US', { timeZone: TIMEZONE });
-    let cardiacDateTime = dateTimeToString(dateTime);
+    let newDate = new Date();
+    let createdAt = newDate.toLocaleString('en-US', { timeZone: TIMEZONE });
+    let cardiacDateTime = dateTimeToString(date, time);
 
     let fields = {
         email: email,
@@ -183,15 +203,17 @@ const userProvidesVentilatorDetails = async (req) => {
 
     await AT.createNewDonor(fields);
 
+    userProvidesName(fullName, organization.id);
+    userProvidesPhoneNumber(phoneNumber, organization.id);
+
     return {
         fulfillmentText: `Thank you ${fullName}, a coordinator will be reaching out to you ${phoneNumber} in the next 1 hour with additional information.`
     }
 };
 
 // Handle user provides name
-const userProvidesName = async (req) => {
+const userProvidesName = async (fullName, id) => {
 
-    let fullName = req.body.queryResult.parameters.fullName.name;
     let values = fullName.split(' ');
     let firstName, lastName;
 
@@ -206,51 +228,22 @@ const userProvidesName = async (req) => {
         lastName = 'No last name';
     }
 
-    let outputContexts = req.body.queryResult.outputContexts;
-    let organization = {};
-
-    outputContexts.forEach(outputContext => {
-        let session = outputContext.name;
-        if (session.includes('/contexts/session-vars')) {
-            organization = outputContext.parameters.organization;
-        }
-    });
-
     let fields = {
         firstName: firstName,
         lastName: lastName
     };
 
-    await AT.updateOrganizationById(organization.id, fields);
-
-    return {
-        fulfillmentText: 'Please let me know a callback number where we can contact you.'
-    }
+    await AT.updateOrganizationById(id, fields);
 };
 
 // Handle userProvidesPhoneNumber
-const userProvidesPhoneNumber = async (req) => {
-
-    let phoneNumber = req.body.queryResult.parameters.phoneNumber;
-    let outputContexts = req.body.queryResult.outputContexts;
-    let organization = {};
-
-    outputContexts.forEach(outputContext => {
-        let session = outputContext.name;
-        if (session.includes('/contexts/session-vars')) {
-            organization = outputContext.parameters.organization;
-        }
-    });
+const userProvidesPhoneNumber = async (phoneNumber, id) => {
 
     let fields = {
         phoneNumber: `${phoneNumber}`
     };
 
-    await AT.updateOrganizationById(organization.id, fields);
-
-    return {
-        fulfillmentText: 'Please let me know patients cardiac date and time of death.'
-    }
+    await AT.updateOrganizationById(id, fields);
 };
 
 // Google Dialogflow Webhook

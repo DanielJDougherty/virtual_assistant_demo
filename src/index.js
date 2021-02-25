@@ -181,15 +181,12 @@ const userProvidesVentilatorDetails = async (req) => {
             ventilatorDetail = outputContext.parameters.ventilatorDetail;
             fullName = outputContext.parameters.fullName.name;
             date = outputContext.parameters.date;
-            time = outputContext.parameters['date-time'];
+            time = outputContext.parameters['date-time'][0]['date_time'];
             phoneNumber = outputContext.parameters.phoneNumber;
         }
     });
 
-    let deathDate, deathTime;
-    deathDate = time[1];
-    deathTime = time[0];
-    deathDateTime = dateTimeToString(deathDate, deathTime);
+    let deathDateTime = dateTimeToString(time, time);
 
     let newDate = new Date();
     let createdAt = newDate.toLocaleString('en-US', { timeZone: TIMEZONE });
@@ -201,23 +198,12 @@ const userProvidesVentilatorDetails = async (req) => {
         name: fullName,
         phoneNumber: `${phoneNumber}`,
         cardiacDate: cardiacDateTime,
-        deathTime: cardiacDateTime,
+        deathTime: deathDateTime,
         ventilatorDetail: ventilatorDetail,
         createdAt: createdAt
     };
 
     await AT.createNewDonor(fields);
-
-    userProvidesName(fullName, organization.id);
-    userProvidesPhoneNumber(phoneNumber, organization.id);
-
-    return {
-        fulfillmentText: `Thank you ${fullName}, a coordinator will be reaching out to you ${phoneNumber} in the next 1 hour with additional information.`
-    }
-};
-
-// Handle user provides name
-const userProvidesName = async (fullName, id) => {
 
     let values = fullName.split(' ');
     let firstName, lastName;
@@ -233,28 +219,90 @@ const userProvidesName = async (fullName, id) => {
         lastName = 'No last name';
     }
 
+    let updateFields = {
+        firstName: firstName,
+        lastName: lastName,
+        phoneNumber: `${phoneNumber}`
+    };
+
+    await AT.updateOrganizationById(organization.id, updateFields);
+
+    return {
+        fulfillmentText: `Thank you ${fullName}, a coordinator will be reaching out to you ${phoneNumber} in the next 1 hour with additional information.`
+    }
+};
+
+// Handle user provides name
+const userProvidesName = async (req) => {
+
+    let fullName = req.body.queryResult.parameters.fullName.name;
+    let values = fullName.split(' ');
+    let firstName, lastName;
+
+    if (values.length == 1) {
+        firstName = values[0];
+        lastName = 'No last name';
+    } else if (values.length == 2) {
+        firstName = values[0];
+        lastName = values[1];
+    } else {
+        firstName = values[0];
+        lastName = 'No last name';
+    }
+
+    let outputContexts = req.body.queryResult.outputContexts;
+    let organization = {};
+
+    outputContexts.forEach(outputContext => {
+        let session = outputContext.name;
+        if (session.includes('/contexts/session-vars')) {
+            organization = outputContext.parameters.organization;
+        }
+    });
+
     let fields = {
         firstName: firstName,
         lastName: lastName
     };
 
-    await AT.updateOrganizationById(id, fields);
+    await AT.updateOrganizationById(organization.id, fields);
+
+    return {
+        fulfillmentText: 'Please let me know a callback number where we can contact you.'
+    }
 };
 
 // Handle userProvidesPhoneNumber
-const userProvidesPhoneNumber = async (phoneNumber, id) => {
+const userProvidesPhoneNumber = async (req) => {
+
+    let phoneNumber = req.body.queryResult.parameters.phoneNumber;
+    let outputContexts = req.body.queryResult.outputContexts;
+    let organization = {};
+
+    outputContexts.forEach(outputContext => {
+        let session = outputContext.name;
+        if (session.includes('/contexts/session-vars')) {
+            organization = outputContext.parameters.organization;
+        }
+    });
 
     let fields = {
         phoneNumber: `${phoneNumber}`
     };
 
-    await AT.updateOrganizationById(id, fields);
+    await AT.updateOrganizationById(organization.id, fields);
+
+    return {
+        fulfillmentText: 'Please let me know patients cardiac date and time of death.'
+    }
 };
 
 // Google Dialogflow Webhook
 webApp.post('/webhook', async (req, res) => {
 
     let action = req.body.queryResult.action;
+
+    console.log(`This is the action -> ${action}`);
 
     let responseText = {};
 
